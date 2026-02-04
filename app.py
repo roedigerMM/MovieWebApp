@@ -4,6 +4,7 @@ from models import db, Movie, User
 import os
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("MOVIWEB_SECRET_KEY", "dev-secret-key")
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 data_dir = os.path.join(basedir, "data")
@@ -19,7 +20,8 @@ data_manager = DataManager()
 @app.route("/", methods=["GET"])
 def home():
     users = data_manager.get_users()
-    return render_template("home.html", users=users)
+    error = request.args.get("error")
+    return render_template("home.html", users=users, error=error)
 
 @app.route("/users", methods=["POST"])
 def create_user():
@@ -27,7 +29,9 @@ def create_user():
     if not name:
         return redirect(url_for("home"))
 
-    data_manager.create_user(name)
+    created_user = data_manager.create_user(name)
+    if created_user is None:
+        return redirect(url_for("home", error="User already exists. Please choose a different name."))
     return redirect(url_for("home"))
 
 @app.route("/users/<int:user_id>/movies", methods=["GET"])

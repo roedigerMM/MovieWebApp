@@ -1,13 +1,26 @@
 from models import db, User, Movie
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 class DataManager():
     # Define Crud operations as methods
     # --- Users ---
     def create_user(self, name):
-        """Add a new user to the database and return it."""
+        """Add a new user to the database and return it.
+
+        Returns None if a user with the same name (case-insensitive) already exists.
+        """
+        existing_user = User.query.filter(func.lower(User.name) == name.lower()).first()
+        if existing_user is not None:
+            return None
+
         new_user = User(name=name)
         db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return None
         return new_user
 
     def get_users(self) -> list[User]:
@@ -46,5 +59,3 @@ class DataManager():
 
         db.session.delete(movie)
         db.session.commit()
-
-

@@ -26,7 +26,7 @@ class User(db.Model):
 
     # Define all the User properties
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, unique=True)
 
     def __repr__(self) -> str:
         """Return a debug-friendly representation (useful in logs and the Python shell)."""
