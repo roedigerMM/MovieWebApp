@@ -39,25 +39,25 @@ db.init_app(app)
 data_manager = DataManager()
 
 @app.route("/", methods=["GET"])
-def home():
+def index():
     users = data_manager.get_users()
     error = request.args.get("error")
-    return render_template("home.html", users=users, error=error)
+    return render_template("index.html", users=users, error=error)
 
 @app.route("/users", methods=["POST"])
 def create_user():
     name = request.form.get("name", "").strip()
     if not name:
-        return redirect(url_for("home"))
+        return redirect(url_for("index"))
 
     created_user = data_manager.create_user(name)
     if created_user is None:
-        return redirect(url_for("home", error="User already exists. Please choose a different name."))
-    return redirect(url_for("home"))
+        return redirect(url_for("index", error="User already exists. Please choose a different name."))
+    return redirect(url_for("index"))
 
 @app.route("/users/<int:user_id>/movies", methods=["GET"])
 def user_movies(user_id: int):
-    user = User.query.get(user_id)
+    user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
 
@@ -191,7 +191,7 @@ def fetch_movie_details_by_id(imdb_id: str):
 
 @app.route("/users/<int:user_id>/movies", methods=["POST"])
 def add_user_movie(user_id: int):
-    user = User.query.get(user_id)
+    user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
 
@@ -236,7 +236,7 @@ def add_user_movie(user_id: int):
 
 @app.route("/users/<int:user_id>/movies/<int:movie_id>/update", methods=["POST"])
 def update_user_movie(user_id: int, movie_id: int):
-    user = User.query.get(user_id)
+    user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
 
@@ -245,6 +245,9 @@ def update_user_movie(user_id: int, movie_id: int):
         return redirect(url_for("user_movies", user_id=user_id))
 
     try:
+        movie = data_manager.get_movie(movie_id)
+        if movie is None or movie.user_id != user_id:
+            abort(404)
         data_manager.update_movie(movie_id, new_title)
     except ValueError:
         abort(404)
@@ -253,11 +256,14 @@ def update_user_movie(user_id: int, movie_id: int):
 
 @app.route("/users/<int:user_id>/movies/<int:movie_id>/delete", methods=["POST"])
 def delete_user_movie(user_id: int, movie_id: int):
-    user = User.query.get(user_id)
+    user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
 
     try:
+        movie = data_manager.get_movie(movie_id)
+        if movie is None or movie.user_id != user_id:
+            abort(404)
         data_manager.delete_movie(movie_id)
     except ValueError:
         abort(404)

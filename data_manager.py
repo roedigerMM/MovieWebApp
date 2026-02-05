@@ -23,6 +23,10 @@ class DataManager():
             return None
         return new_user
 
+    def get_user(self, user_id: int) -> User | None:
+        """Get a single user by id."""
+        return User.query.get(user_id)
+
     def get_users(self) -> list[User]:
         """Get all users from the database."""
         return User.query.order_by(User.id.asc()).all()
@@ -31,6 +35,10 @@ class DataManager():
     def get_movies(self, user_id: int) -> list[Movie]:
         """Return a list of all movies for a specific user."""
         return Movie.query.filter_by(user_id=user_id).order_by(Movie.id.asc()).all()
+
+    def get_movie(self, movie_id: int) -> Movie | None:
+        """Get a single movie by id."""
+        return Movie.query.get(movie_id)
 
     def add_movie(self, movie: Movie) -> Movie:
         """Add a movie to the database.

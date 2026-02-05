@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <a href="{{ url_for('index') }}">Back to users</a>
+
+  <h2>{{ user.name }}'s Favorite Movies</h2>
+
+  {% if error %}
+    <p style="color: #b00020;">{{ error }}</p>
+  {% endif %}
+
+    <section>
+      <h3>Add Movie</h3>
+      <form action="{{ url_for('add_user_movie', user_id=user.id) }}" method="post">
+        <label for="title">Title</label>
+        <input id="title" name="title" type="text" value="{{ search_title or '' }}" required />
+        <button type="submit">Add Movie</button>
+      </form>
+
+      {% if search_results %}
+        <h4>Choose a Match</h4>
+        <form action="{{ url_for('add_user_movie', user_id=user.id) }}" method="post">
+          <input type="hidden" name="title" value="{{ search_title }}" />
+          {% for result in search_results %}
+            <label>
+              <input type="radio" name="imdb_id" value="{{ result.imdb_id }}" required />
+              {{ result.title }} ({{ result.year }})
+            </label>
+            {% if result.poster_url and result.poster_url != "N/A" %}
+              <img src="{{ result.poster_url }}" alt="Poster for {{ result.title }}" width="60" />
+            {% endif %}
+            <br />
+          {% endfor %}
+          <button type="submit">Use Selected Movie</button>
+        </form>
+      {% endif %}
+    </section>
+
+  <section>
+    <h3>Movies</h3>
+    {% if movies %}
+      <ul>
+        {% for movie in movies %}
+          <li>
+            <h4>{{ movie.name }} ({{ movie.year }})</h4>
+            <p>Director: {{ movie.director }}</p>
+            <p>
+              <img src="{{ movie.poster_url }}" alt="Poster for {{ movie.name }}" width="150" />
+            </p>
+
+            <form action="{{ url_for('update_user_movie', user_id=user.id, movie_id=movie.id) }}" method="post">
+              <label for="title-{{ movie.id }}">Update Title</label>
+              <input id="title-{{ movie.id }}" name="title" type="text" value="{{ movie.name }}" required />
+              <button type="submit">Update</button>
+            </form>
+
+            <form action="{{ url_for('delete_user_movie', user_id=user.id, movie_id=movie.id) }}" method="post">
+              <button type="submit">Delete</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No movies yet. Add one above.</p>
+    {% endif %}
+  </section>
+{% endblock %}
