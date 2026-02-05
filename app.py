@@ -107,6 +107,88 @@ def fetch_movie_details(title: str):
         "poster_url": poster_url,
     }, None
 
+def search_movies(title: str):
+    api_key = app.config.get("OMDB_API_KEY")
+    if not api_key:
+        return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
+
+    try:
+        response = requests.get(
+            "https://www.omdbapi.com/",
+            params={"s": title, "apikey": api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException:
+        return None, "Unable to reach OMDb. Please try again."
+    except json.JSONDecodeError:
+        return None, "OMDb returned invalid data."
+
+    if data.get("Response") != "True":
+        return None, data.get("Error", "Movie not found.")
+
+    results = []
+    for item in data.get("Search", []):
+        imdb_id = (item.get("imdbID") or "").strip()
+        if not imdb_id:
+            continue
+        results.append(
+            {
+                "imdb_id": imdb_id,
+                "title": (item.get("Title") or "").strip(),
+                "year": (item.get("Year") or "").strip(),
+                "poster_url": (item.get("Poster") or "").strip(),
+            }
+        )
+
+    if not results:
+        return None, "Movie not found."
+
+    return results, None
+
+def fetch_movie_details_by_id(imdb_id: str):
+    api_key = app.config.get("OMDB_API_KEY")
+    if not api_key:
+        return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
+
+    try:
+        response = requests.get(
+            "https://www.omdbapi.com/",
+            params={"i": imdb_id, "apikey": api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException:
+        return None, "Unable to reach OMDb. Please try again."
+    except json.JSONDecodeError:
+        return None, "OMDb returned invalid data."
+
+    if data.get("Response") != "True":
+        return None, data.get("Error", "Movie not found.")
+
+    year_raw = (data.get("Year") or "").strip()
+    year_digits = "".join([c for c in year_raw if c.isdigit()])
+    year = int(year_digits[:4]) if len(year_digits) >= 4 else None
+    if year is None:
+        return None, "OMDb did not provide a valid release year."
+
+    poster_url = (data.get("Poster") or "").strip()
+    if not poster_url or poster_url == "N/A":
+        return None, "OMDb did not provide a poster URL."
+
+    director = (data.get("Director") or "").strip()
+    if not director or director == "N/A":
+        return None, "OMDb did not provide a director."
+
+    return {
+        "title": (data.get("Title") or "").strip(),
+        "director": director,
+        "year": year,
+        "poster_url": poster_url,
+    }, None
+
 @app.route("/users/<int:user_id>/movies", methods=["POST"])
 def add_user_movie(user_id: int):
     user = User.query.get(user_id)
@@ -114,12 +196,33 @@ def add_user_movie(user_id: int):
         abort(404)
 
     title = request.form.get("title", "").strip()
+    imdb_id = request.form.get("imdb_id", "").strip()
     if not title:
         return redirect(url_for("user_movies", user_id=user_id, error="Please provide a movie title."))
 
-    details, error = fetch_movie_details(title)
-    if error:
-        return redirect(url_for("user_movies", user_id=user_id, error=error))
+    if imdb_id:
+        details, error = fetch_movie_details_by_id(imdb_id)
+        if error:
+            return redirect(url_for("user_movies", user_id=user_id, error=error))
+    else:
+        results, error = search_movies(title)
+        if error:
+            return redirect(url_for("user_movies", user_id=user_id, error=error))
+
+        if len(results) == 1:
+            details, error = fetch_movie_details_by_id(results[0]["imdb_id"])
+            if error:
+                return redirect(url_for("user_movies", user_id=user_id, error=error))
+        else:
+            movies = data_manager.get_movies(user_id)
+            return render_template(
+                "user_movies.html",
+                user=user,
+                movies=movies,
+                search_results=results,
+                search_title=title,
+                error=None,
+            )
 
     movie = Movie(
         name=details["title"],
