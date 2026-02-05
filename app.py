@@ -2,6 +2,26 @@ from flask import Flask, abort, redirect, render_template, request, url_for
 from data_manager import DataManager
 from models import db, Movie, User
 import os
+import json
+import requests
+
+def load_env(path: str = ".env") -> None:
+    if not os.path.exists(path):
+        return
+
+    with open(path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+load_env()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("MOVIWEB_SECRET_KEY", "dev-secret-key")
@@ -12,6 +32,7 @@ os.makedirs(data_dir, exist_ok=True)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.join(data_dir, 'movies.db')}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["OMDB_API_KEY"] = os.environ.get("OMDB_API_KEY")
 
 db.init_app(app)
 
@@ -41,7 +62,50 @@ def user_movies(user_id: int):
         abort(404)
 
     movies = data_manager.get_movies(user_id)
-    return render_template("user_movies.html", user=user, movies=movies)
+    error = request.args.get("error")
+    return render_template("user_movies.html", user=user, movies=movies, error=error)
+
+def fetch_movie_details(title: str):
+    api_key = app.config.get("OMDB_API_KEY")
+    if not api_key:
+        return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
+
+    try:
+        response = requests.get(
+            "https://www.omdbapi.com/",
+            params={"t": title, "apikey": api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException:
+        return None, "Unable to reach OMDb. Please try again."
+    except json.JSONDecodeError:
+        return None, "OMDb returned invalid data."
+
+    if data.get("Response") != "True":
+        return None, data.get("Error", "Movie not found.")
+
+    year_raw = (data.get("Year") or "").strip()
+    year_digits = "".join([c for c in year_raw if c.isdigit()])
+    year = int(year_digits[:4]) if len(year_digits) >= 4 else None
+    if year is None:
+        return None, "OMDb did not provide a valid release year."
+
+    poster_url = (data.get("Poster") or "").strip()
+    if not poster_url or poster_url == "N/A":
+        return None, "OMDb did not provide a poster URL."
+
+    director = (data.get("Director") or "").strip()
+    if not director or director == "N/A":
+        return None, "OMDb did not provide a director."
+
+    return {
+        "title": (data.get("Title") or title).strip(),
+        "director": director,
+        "year": year,
+        "poster_url": poster_url,
+    }, None
 
 @app.route("/users/<int:user_id>/movies", methods=["POST"])
 def add_user_movie(user_id: int):
@@ -50,23 +114,18 @@ def add_user_movie(user_id: int):
         abort(404)
 
     title = request.form.get("title", "").strip()
-    director = request.form.get("director", "").strip()
-    year_raw = request.form.get("year", "").strip()
-    poster_url = request.form.get("poster_url", "").strip()
+    if not title:
+        return redirect(url_for("user_movies", user_id=user_id, error="Please provide a movie title."))
 
-    if not title or not director or not year_raw or not poster_url:
-        return redirect(url_for("user_movies", user_id=user_id))
-
-    try:
-        year = int(year_raw)
-    except ValueError:
-        return redirect(url_for("user_movies", user_id=user_id))
+    details, error = fetch_movie_details(title)
+    if error:
+        return redirect(url_for("user_movies", user_id=user_id, error=error))
 
     movie = Movie(
-        name=title,
-        director=director,
-        year=year,
-        poster_url=poster_url,
+        name=details["title"],
+        director=details["director"],
+        year=details["year"],
+        poster_url=details["poster_url"],
         user_id=user_id,
     )
     data_manager.add_movie(movie)
