@@ -7,10 +7,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   </head>
   <body>
-    <header>
-      <h1>MoviWeb</h1>
-      <nav>
-        <a href="{{ url_for('index') }}">Users</a>
+    <header class="site-header">
+      <a class="logo" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="MoviWeb logo" />
+        <span>MoviWeb</span>
+      </a>
+      <nav class="site-nav">
+        <a class="nav-link" href="{{ url_for('index') }}">Users</a>
       </nav>
     </header>
 
