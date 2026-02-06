@@ -44,14 +44,26 @@ class DataManager():
         """Get a single movie by id."""
         return Movie.query.get(movie_id)
 
-    def add_movie(self, movie: Movie) -> Movie:
+    def add_movie(self, movie: Movie) -> Movie | None:
         """Add a movie to the database.
 
         Expected: `movie` is a Movie ORM object created in app.py (including user_id).
         """
+        # Prevent duplicate movies per user (case-insensitive title check).
+        existing_movie = Movie.query.filter(
+            Movie.user_id == movie.user_id,
+            func.lower(Movie.name) == movie.name.lower(),
+        ).first()
+        if existing_movie is not None:
+            return None
+
         # Persist the movie in a single transaction.
         db.session.add(movie)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return None
         return movie
 
     def update_movie(self, movie_id: int, new_title: str) -> Movie:

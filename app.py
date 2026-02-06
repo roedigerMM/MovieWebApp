@@ -260,7 +260,9 @@ def add_user_movie(user_id: int):
         poster_url=details["poster_url"],
         user_id=user_id,
     )
-    data_manager.add_movie(movie)
+    created_movie = data_manager.add_movie(movie)
+    if created_movie is None:
+        return redirect(url_for("user_movies", user_id=user_id, error="That movie is already in the list."))
     return redirect(url_for("user_movies", user_id=user_id))
 
 @app.route("/users/<int:user_id>/movies/<int:movie_id>/update", methods=["POST"])
