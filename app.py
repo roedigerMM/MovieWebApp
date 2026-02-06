@@ -1,11 +1,14 @@
+"""Flask application routes and OMDb integration for MoviWeb."""
+
 from flask import Flask, abort, redirect, render_template, request, url_for
 from data_manager import DataManager
-from models import db, Movie, User
+from models import db, Movie
 import os
 import json
 import requests
 
 def load_env(path: str = ".env") -> None:
+    """Load key-value pairs from a local .env file into environment variables."""
     if not os.path.exists(path):
         return
 
@@ -21,11 +24,13 @@ def load_env(path: str = ".env") -> None:
             if key and key not in os.environ:
                 os.environ[key] = value
 
+# Load environment variables early so configuration picks them up.
 load_env()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("MOVIWEB_SECRET_KEY", "dev-secret-key")
 
+# Keep the SQLite database inside the project data directory.
 basedir = os.path.abspath(os.path.dirname(__file__))
 data_dir = os.path.join(basedir, "data")
 os.makedirs(data_dir, exist_ok=True)
@@ -34,26 +39,32 @@ app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.join(data_dir, 'mov
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["OMDB_API_KEY"] = os.environ.get("OMDB_API_KEY")
 
+# Attach SQLAlchemy to the Flask app.
 db.init_app(app)
 
+# Shared data access layer for routes.
 data_manager = DataManager()
 
 @app.errorhandler(404)
 def page_not_found(error):
+    # Render a friendly "not found" page for missing resources.
     return render_template("404.html"), 404
 
 @app.errorhandler(500)
 def internal_error(error):
+    # Render a generic error page for unexpected server errors.
     return render_template("500.html"), 500
 
 @app.route("/", methods=["GET"])
 def index():
+    """Render the home page with the list of users."""
     users = data_manager.get_users()
     error = request.args.get("error")
     return render_template("index.html", users=users, error=error)
 
 @app.route("/users", methods=["POST"])
 def create_user():
+    """Create a new user from form input and redirect back to the index."""
     name = request.form.get("name", "").strip()
     if not name:
         return redirect(url_for("index"))
@@ -65,6 +76,7 @@ def create_user():
 
 @app.route("/users/<int:user_id>/movies", methods=["GET"])
 def user_movies(user_id: int):
+    """Show a user's favorite movies and the add-movie form."""
     user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
@@ -74,10 +86,12 @@ def user_movies(user_id: int):
     return render_template("user_movies.html", user=user, movies=movies, error=error)
 
 def fetch_movie_details(title: str):
+    """Fetch a single movie by title from OMDb."""
     api_key = app.config.get("OMDB_API_KEY")
     if not api_key:
         return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
 
+    # Query OMDb for a single match by title.
     try:
         response = requests.get(
             "https://www.omdbapi.com/",
@@ -116,10 +130,12 @@ def fetch_movie_details(title: str):
     }, None
 
 def search_movies(title: str):
+    """Search OMDb for a list of matching movies by title."""
     api_key = app.config.get("OMDB_API_KEY")
     if not api_key:
         return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
 
+    # Query OMDb for multiple matches by title.
     try:
         response = requests.get(
             "https://www.omdbapi.com/",
@@ -156,10 +172,12 @@ def search_movies(title: str):
     return results, None
 
 def fetch_movie_details_by_id(imdb_id: str):
+    """Fetch a single movie by IMDb id from OMDb."""
     api_key = app.config.get("OMDB_API_KEY")
     if not api_key:
         return None, "OMDb API key is missing. Set OMDB_API_KEY in your environment."
 
+    # Query OMDb by IMDb id to get the full movie details.
     try:
         response = requests.get(
             "https://www.omdbapi.com/",
@@ -199,6 +217,7 @@ def fetch_movie_details_by_id(imdb_id: str):
 
 @app.route("/users/<int:user_id>/movies", methods=["POST"])
 def add_user_movie(user_id: int):
+    """Add a movie for a user by searching OMDb with the provided title."""
     user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
@@ -208,6 +227,7 @@ def add_user_movie(user_id: int):
     if not title:
         return redirect(url_for("user_movies", user_id=user_id, error="Please provide a movie title."))
 
+    # If an IMDb id is provided, use it directly; otherwise search by title.
     if imdb_id:
         details, error = fetch_movie_details_by_id(imdb_id)
         if error:
@@ -222,6 +242,7 @@ def add_user_movie(user_id: int):
             if error:
                 return redirect(url_for("user_movies", user_id=user_id, error=error))
         else:
+            # Multiple matches; re-render the page with selection options.
             movies = data_manager.get_movies(user_id)
             return render_template(
                 "user_movies.html",
@@ -244,6 +265,7 @@ def add_user_movie(user_id: int):
 
 @app.route("/users/<int:user_id>/movies/<int:movie_id>/update", methods=["POST"])
 def update_user_movie(user_id: int, movie_id: int):
+    """Update a movie title for a given user."""
     user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
@@ -252,6 +274,7 @@ def update_user_movie(user_id: int, movie_id: int):
     if not new_title:
         return redirect(url_for("user_movies", user_id=user_id))
 
+    # Ensure the movie belongs to the user before updating.
     try:
         movie = data_manager.get_movie(movie_id)
         if movie is None or movie.user_id != user_id:
@@ -264,10 +287,12 @@ def update_user_movie(user_id: int, movie_id: int):
 
 @app.route("/users/<int:user_id>/movies/<int:movie_id>/delete", methods=["POST"])
 def delete_user_movie(user_id: int, movie_id: int):
+    """Delete a movie from a user's favorites."""
     user = data_manager.get_user(user_id)
     if user is None:
         abort(404)
 
+    # Ensure the movie belongs to the user before deleting.
     try:
         movie = data_manager.get_movie(movie_id)
         if movie is None or movie.user_id != user_id:

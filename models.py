@@ -1,6 +1,4 @@
-#models.py
-"""
-SQLAlchemy models for the Movie Library app.
+"""SQLAlchemy models for the MoviWeb app.
 
 Models:
 - User: Stores basic User metadata.
@@ -19,12 +17,9 @@ class User(db.Model):
         Columns:
             id: Integer primary key.
             name: Username (required).
-
-        Relationships:
-            pass
     """
 
-    # Define all the User properties
+    # Define the User table columns.
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
 
@@ -48,16 +43,16 @@ class Movie(db.Model):
             user_id: Foreign key referencing User.id (required).
 
         Relationships:
-            user: The User instance associated with this book.
+            user: The User instance associated with this movie.
         """
-    # Define all the Movie properties
+    # Define the Movie table columns.
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     director = db.Column(db.String(100), nullable=False)
     year = db.Column(db.Integer, nullable=False)
     poster_url = db.Column(db.String(255), nullable=False)
 
-    # Link Movie to User
+    # Link Movie to User.
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     def __repr__(self) -> str:

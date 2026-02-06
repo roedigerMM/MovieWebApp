@@ -1,19 +1,23 @@
+"""Centralized database access layer for users and movies."""
+
 from models import db, User, Movie
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 class DataManager():
-    # Define Crud operations as methods
+    """Encapsulates CRUD operations for users and movies."""
     # --- Users ---
     def create_user(self, name):
         """Add a new user to the database and return it.
 
         Returns None if a user with the same name (case-insensitive) already exists.
         """
+        # Enforce case-insensitive uniqueness at the application layer.
         existing_user = User.query.filter(func.lower(User.name) == name.lower()).first()
         if existing_user is not None:
             return None
 
+        # Attempt to commit and handle race conditions via IntegrityError.
         new_user = User(name=name)
         db.session.add(new_user)
         try:
@@ -45,6 +49,7 @@ class DataManager():
 
         Expected: `movie` is a Movie ORM object created in app.py (including user_id).
         """
+        # Persist the movie in a single transaction.
         db.session.add(movie)
         db.session.commit()
         return movie
@@ -55,6 +60,7 @@ class DataManager():
         if movie is None:
             raise ValueError(f"Movie with id={movie_id} not found")
 
+        # Update only the title for manual corrections.
         movie.name = new_title
         db.session.commit()
         return movie
@@ -65,5 +71,6 @@ class DataManager():
         if movie is None:
             raise ValueError(f"Movie with id={movie_id} not found")
 
+        # Remove the movie from the database.
         db.session.delete(movie)
         db.session.commit()
